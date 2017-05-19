@@ -1,0 +1,302 @@
+
+oc new-app --docker-file=docker-io/sonatype/nexus3
+
+oc edit dc nexus3
+# remove volume mounts
+
+oc volumes dc/nexus3 --add --name=nexus-data-2 -m /nexus-data --claim-size=4G --overwrite
+
+# add some liveliness stuff
+
+
+# PostgreSQL for SonarQube
+
+oc new-app postgresql-persistent --name=postgresql-sonarqube --param POSTGRESQL_USER=sonar --param POSTGRESQL_PASSWORD=sonarqube --param POSTGRESQL_DATABASE=sonarqube 
+
+
+# SonarQube
+oc new-app --docker-image="docker.io/wkulhanek/sonarqube" -e "SONARQUBE_JDBC_USERNAME=sonar,SONARQUBE_JDBC_PASSWORD=sonarqube,SONARQUBE_JDBC_URL=jdbc:postgresql://postgresql/sonarqube" --name='sonarqube'
+
+oc expose svc sonarqube --port 9000
+
+
+
+# gogs
+
+#### SKIP THIS oc new-app postgresql-persistent --name=postgresql-gogs --param POSTGRESQL_USER=gogs --param POSTGRESQL_PASSWORD=gogs --param POSTGRESQL_DATABASE=gogs --param DATABASE_SERVICE_NAME=postgresql-gogs
+oc new-app -f http://bit.ly/openshift-gogs-persistent-template --param HOSTNAME=gogs-demo.apps.advdev.openshift.opentlc.com
+
+
+
+
+oc get dc sonarqube-pg -o json | jq '.spec.template.spec.containers[0].livenessProbe = { "tcpSocket": { "port": 9000 }, "initialDelaySeconds": 5, "timeoutSeconds": 1 } | .spec.template.spec.containers[0].readinessProbe = { "httpGet": { "path": "/", "port": 9000 }, "initialDelaySeconds": 5, "timeoutSeconds": 1 }' | oc replace -f - 
+
+
+# GOGS TLS stuff
+
+
+
+
+
+
+
+
+
+ oc new-app eap64-basic-s2i --param APPLICATION_NAME=tasks --param SOURCE_REPOSITORY_URL=http://gogs-moss-cicd.apps.advdev.openshift.opentlc.com/moss/openshift-tasks-ocp.git --param SOURCE_REPOSITORY_REF=master --param CONTEXT_DIR=/
+
+oc set triggers dc/tasks --remove-all
+
+
+
+
+
+
+
+
+
+
+
+oc policy add-role-to-user edit system:serviceaccount:test:<service account name>
+
+oc policy add-role-to-user edit system:serviceaccount:moss-cicd:jenkins -n moss-tasks-devel
+oc policy add-role-to-user edit system:serviceaccount:moss-cicd:jenkins -n moss-tasks-devel
+				system:serviceaccount:moss-cicd:jenkins
+
+
+
+#!/bin/bash
+
+while read oldrev newrev refname
+do
+    branch=$(git rev-parse --symbolic --abbrev-ref $refname)
+    if [[ "$branch" == "master" ]]; then
+    	curl -X POST --user user5-admin:dfff4b4a918fa7cce703385cccae54ff http://https://jenkins-moss-cicd.apps.advdev.openshift.opentlc.com/job/Tasks/build
+    fi
+done
+
+
+
+make sure that triggers are off
+deploy through jenkins with
+
+openshiftDeploy depCfg: 'tasks', namespace: 'moss-tasks-dev'
+
+
+# new project
+oc project moss-tasks-prod
+oc policy add-role-to-user edit system:serviceaccount:moss-cicd:jenkins -n moss-tasks-prod
+
+oc new-app tasks-green 
+oc new-app tasks-blue
+oc set triggers dc tasks-green --manual
+ oc set triggers dc tasks-blue --manual
+
+
+
+
+
+####### BC for tasks in NS: moss-tasks-devel
+apiVersion: v1
+kind: BuildConfig
+metadata:
+  annotations:
+    openshift.io/generated-by: OpenShiftNewApp
+  creationTimestamp: 2017-05-17T17:44:28Z
+  labels:
+    app: eap64-basic-s2i
+    application: tasks
+    template: eap64-basic-s2i
+    xpaas: 1.3.2
+  name: tasks
+  namespace: moss-tasks-devel
+  resourceVersion: "741600"
+  selfLink: /oapi/v1/namespaces/moss-tasks-devel/buildconfigs/tasks
+  uid: 79e0904f-3b28-11e7-ae2e-027bcd66754b
+spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: tasks:latest
+  postCommit: {}
+  resources: {}
+  runPolicy: Serial
+  source:
+    contextDir: /
+    git:
+      ref: master
+      uri: http://gogs-moss-cicd.apps.advdev.openshift.opentlc.com/moss/openshift-tasks-ocp.git
+    type: Git
+  strategy:
+    sourceStrategy:
+      forcePull: true
+      from:
+        kind: ImageStreamTag
+        name: jboss-eap64-openshift:1.4
+        namespace: openshift
+    type: Source
+  triggers:
+  - github:
+      secret: BUV02Ulb
+    type: GitHub
+  - generic:
+      secret: tCte7OBR
+    type: Generic
+  - imageChange:
+      lastTriggeredImageID: registry.access.redhat.com/jboss-eap-6/eap64-openshift@sha256:16b75fdf558ab54bc423fc77d9006ddc83204b6b510bb4821a08cf08ce0c92fa
+    type: ImageChange
+  - type: ConfigChange
+status:
+  lastVersion: 6
+
+
+######## DC for Tasks in moss-tasks-devel
+
+apiVersion: v1
+kind: DeploymentConfig
+metadata:
+  annotations:
+    openshift.io/generated-by: OpenShiftNewApp
+  creationTimestamp: 2017-05-17T17:44:28Z
+  generation: 11
+  labels:
+    app: eap64-basic-s2i
+    application: tasks
+    template: eap64-basic-s2i
+    xpaas: 1.3.2
+  name: tasks
+  namespace: moss-tasks-devel
+  resourceVersion: "742113"
+  selfLink: /oapi/v1/namespaces/moss-tasks-devel/deploymentconfigs/tasks
+  uid: 79e5a853-3b28-11e7-ae2e-027bcd66754b
+spec:
+  replicas: 1
+  selector:
+    deploymentConfig: tasks
+  strategy:
+    recreateParams:
+      timeoutSeconds: 600
+    resources: {}
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        openshift.io/generated-by: OpenShiftNewApp
+      creationTimestamp: null
+      labels:
+        app: eap64-basic-s2i
+        application: tasks
+        deploymentConfig: tasks
+      name: tasks
+    spec:
+      containers:
+      - env:
+        - name: OPENSHIFT_KUBE_PING_LABELS
+          value: application=tasks
+        - name: OPENSHIFT_KUBE_PING_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        - name: HORNETQ_CLUSTER_PASSWORD
+          value: T6DCyCDB
+        - name: HORNETQ_QUEUES
+        - name: HORNETQ_TOPICS
+        - name: JGROUPS_CLUSTER_PASSWORD
+          value: hX4tAq7e
+        - name: AUTO_DEPLOY_EXPLODED
+          value: "false"
+        image: 172.30.176.124:5000/moss-tasks-devel/tasks@sha256:f1ffe5d88c16bf6f53c8085ca612da3ce501c3f2b42b7c41fefd3094f61c41a1
+        imagePullPolicy: Always
+        livenessProbe:
+          exec:
+            command:
+            - /bin/bash
+            - -c
+            - /opt/eap/bin/livenessProbe.sh
+          failureThreshold: 3
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: tasks
+        ports:
+        - containerPort: 8778
+          name: jolokia
+          protocol: TCP
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        - containerPort: 8888
+          name: ping
+          protocol: TCP
+        readinessProbe:
+          exec:
+            command:
+            - /bin/bash
+            - -c
+            - /opt/eap/bin/readinessProbe.sh
+          failureThreshold: 3
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      securityContext: {}
+      terminationGracePeriodSeconds: 60
+  test: false
+  triggers:
+  - imageChangeParams:
+      containerNames:
+      - tasks
+      from:
+        kind: ImageStreamTag
+        name: tasks:devel
+        namespace: moss-tasks-devel
+      lastTriggeredImage: 172.30.176.124:5000/moss-tasks-devel/tasks@sha256:f1ffe5d88c16bf6f53c8085ca612da3ce501c3f2b42b7c41fefd3094f61c41a1
+    type: ImageChange
+status:
+  availableReplicas: 1
+  details:
+    causes:
+    - type: Manual
+    message: manual change
+  latestVersion: 5
+  observedGeneration: 11
+  replicas: 1
+  updatedReplicas: 1
+
+oc new-app eap64-basic-s2i --param APPLICATION_NAME=tasks-green --param SOURCE_REPOSITORY_URL=http://gogs-moss-cicd.apps.advdev.openshift.opentlc.com/moss/openshift-tasks-ocp.git --param 
+SOURCE_REPOSITORY_REF=master --param CONTEXT_DIR=/
+
+oc new-app eap64-basic-s2i --param APPLICATION_NAME=tasks-blue --param SOURCE_REPOSITORY_URL=http://gogs-moss-cicd.apps.advdev.openshift.opentlc.com/moss/openshift-tasks-ocp.git --param 
+SOURCE_REPOSITORY_REF=master --param CONTEXT_DIR=/
+
+oc set triggers dc/tasks-green --manual
+
+oc set triggers dc/tasks-blue --manual
+
+SOMETHING TO ALLOW prod proj to access imagestream from devel
+[moss@lappatop ~]$ oc adm policy add-role-to-group system:image-puller system:serviceaccounts:moss-tasks-prod -n moss-tasks-devel <-- might not work
+[moss@lappatop ~]$ oc adm policy add-role-to-group admin system:serviceaccounts:moss-tasks-prod -n moss-tasks-devel <-- will def work :)
+
+[moss@lappatop ~]$ oc new-app moss-tasks-devel/tasks:prod-ready --name=tasks-blue 
+[moss@lappatop ~]$ oc new-app moss-tasks-devel/tasks:prod-ready --name=tasks-green
+
+
+# Create the service with alt dep (IE. Blue /green deployment route)
+oc expose svc tasks-blue --name=tasks
+
+
+oc get  routes/tasks --template={{.spec.to.name}}
+
+
+$ oc patch route/bluegreen-example -p '{"spec":{"to":{"name":"example-blue"}}}'
+
+
+
+
+
+
+
+
