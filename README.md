@@ -1,6 +1,27 @@
-OpenShift Tasks: JAX-RS, JPA quickstart 
+
+OpenShift Tasks with Jenkins Pipeline, Nexus and SonarQube 
 ==============================
 [![CircleCI](https://circleci.com/gh/OpenShiftDemos/openshift-tasks.svg?&style=shield&circle-token=1462d2d99334a912b32f758616eb39f6390a200b)](https://circleci.com/gh/OpenShiftDemos/openshift-tasks)
+
+All infra stuff like Jenkins, Gogs + postgresql, Nexus, SonarQube + PostgreSQL
+resides inside their own namespace/project called moss-cicd.
+
+Setup: 
+
+Jenkins:
+
+
+Gogs:
+
+	Quick Way:  
+	oc new-app -f http://bit.ly/openshift-gogs-persistent-template --param HOSTNAME=gogs-moss-cicd.apps.advdev.openshift.opentlc.com
+	
+
+Nexus:
+	
+
+SonarQube
+
 
 What is it?
 -----------
